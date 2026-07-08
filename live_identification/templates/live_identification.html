@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>HAL – Live Identification</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+  .li-layout       { display:flex; gap:16px; height:calc(100vh - 185px); }
+  .li-feed         { flex:1.4; display:flex; flex-direction:column; }
+  .li-feed .panel  { flex:1; padding:10px; display:flex; flex-direction:column; }
+  .li-feed img     { flex:1; width:100%; border-radius:12px; object-fit:cover; }
+  .li-right        { flex:1.6; display:flex; flex-direction:column; gap:12px; overflow-y:auto; }
+
+  .start-screen    { display:flex; flex-direction:column; align-items:center;
+                     justify-content:center; height:100%; gap:20px;
+                     text-align:center; padding:30px; }
+  .start-screen h2 { font-size:22px; color:#0b1f3a; }
+  .start-screen p  { color:#666; font-size:14px; max-width:320px; }
+  .start-btn       { padding:16px 40px; background:#007bff; color:#fff;
+                     border:none; border-radius:12px; font-size:18px;
+                     font-weight:700; cursor:pointer; transition:.2s; }
+  .start-btn:hover { background:#0056b3; transform:translateY(-2px); }
+
+  .count-boxes     { display:flex; flex-direction:column; gap:16px; }
+  .count-box       { background:#fff; border-radius:12px;
+                     box-shadow:0 2px 8px rgba(0,0,0,.08);
+                     border-left:4px solid #007bff; position:relative; }
+  .cbox-header     { display:flex; align-items:center; justify-content:space-between;
+                     padding:10px 14px 0; }
+  .cbox-header h4  { font-size:11px; color:#007bff; text-transform:uppercase;
+                     letter-spacing:.6px; margin:0; padding-right:28px; }
+  .cbox-conf       { font-size:11px; color:#888; }
+  .cbox-cols       { display:flex; gap:0; }
+  .cbox-col        { flex:1; padding:10px 14px 14px; }
+  .cbox-col:first-child { border-right:1px solid #eef; }
+  .col-label       { font-size:10px; font-weight:700; text-transform:uppercase;
+                     letter-spacing:.7px; margin-bottom:8px; padding:3px 8px;
+                     border-radius:4px; display:inline-block; }
+  .col-label.detected { background:#e8f4fd; color:#0066cc; }
+  .col-label.edited   { background:#e8f9ef; color:#1a7a3c; }
+  .cbox-field      { margin-bottom:8px; }
+  .cbox-field label { font-size:10px; color:#999; display:block; margin-bottom:2px; }
+  .cbox-field .val { font-size:13px; font-weight:600; color:#0b1f3a;
+                     padding:4px 0; border-bottom:1px solid #f0f0f0; }
+  .cbox-row        { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .cbox-row label  { font-size:10px; color:#999; min-width:60px; }
+  .cbox-row input  { flex:1; padding:5px 8px; border-radius:6px;
+                     border:1.5px solid #ccd; font-size:13px; font-weight:600; }
+  .cbox-row input.count-input { width:65px; flex:none; text-align:center; font-size:15px; }
+  .cbox-row input:disabled { background:#f5f5f5; color:#aaa; cursor:not-allowed; }
+  .count-row       { padding:8px 14px 12px; border-top:1px solid #f0f0f0;
+                     display:flex; align-items:center; gap:10px; }
+  .count-row label { font-size:11px; color:#888; }
+  .cbox-delete     { position:absolute; top:8px; right:10px; width:24px; height:24px;
+                     border-radius:50%; background:#ff3b30; color:#fff; border:none;
+                     font-size:14px; line-height:24px; text-align:center;
+                     cursor:pointer; font-weight:bold; padding:0; transition:.15s; }
+  .cbox-delete:hover { background:#cc0000; transform:scale(1.1); }
+  .cbox-wrap       { position:relative; flex:1; }
+  .combo-list      { display:none; position:absolute; top:100%; left:0; right:0;
+                     max-height:160px; overflow-y:auto; background:#fff;
+                     border:1.5px solid #ccd; border-radius:8px; margin-top:2px;
+                     z-index:999; box-shadow:0 4px 12px rgba(0,0,0,.12); }
+  .combo-item      { padding:7px 10px; font-size:12px; cursor:pointer; }
+  .combo-item:hover { background:#eef6ff; }
+
+  .timer-section   { background:#fff; border-radius:12px; padding:14px 16px;
+                     box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .timer-label     { font-size:12px; color:#555; margin-bottom:8px;
+                     display:flex; justify-content:space-between; align-items:center; }
+  .timer-bar-wrap  { height:10px; background:#e0e8f0; border-radius:6px; overflow:hidden; }
+  .timer-fill      { height:100%; background:#007bff; border-radius:6px;
+                     transition:width .5s linear; width:0%; }
+  .timer-fill.done { background:#28a745; width:100%; }
+  .timer-countdown { font-size:22px; font-weight:800; color:#007bff;
+                     text-align:center; margin-top:8px; }
+  .timer-countdown.done { color:#28a745; }
+  .total-box       { background:#0b1f3a; color:#fff; border-radius:12px;
+                     padding:12px 18px; text-align:center; }
+  .total-box .tlabel { font-size:11px; color:#aac; text-transform:uppercase; letter-spacing:.6px; }
+  .total-box .tval   { font-size:28px; font-weight:800; margin-top:4px; }
+  .action-btn      { width:100%; padding:12px; border:none; border-radius:10px;
+                     font-size:15px; font-weight:700; cursor:pointer; transition:.2s; }
+  .action-btn.confirm  { background:#28a745; color:#fff; }
+  .action-btn.confirm:hover { background:#1e7e34; }
+  .action-btn.rerecog  { background:#ff9500; color:#fff; }
+  .action-btn.rerecog:hover { background:#cc7700; }
+  .confirm-status  { text-align:center; font-size:12px; color:#28a745;
+                     margin-top:4px; min-height:18px; }
+  .scanning-msg    { text-align:center; color:#007bff; font-size:13px;
+                     padding:20px 0; font-weight:600; }
+  .no-detect       { text-align:center; color:#aaa; font-size:13px; padding:20px 0; }
+  .go-back         { display:inline-flex; align-items:center; gap:6px;
+                     background:#0b1f3a; color:#fff; border:none; border-radius:8px;
+                     padding:9px 18px; font-size:14px; cursor:pointer; margin-bottom:12px; }
+  .go-back:hover   { background:#183d69; }
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <div class="sidebar" id="sidebar">
+    <button class="collapse-btn" onclick="toggleSidebar()">&#9776;</button>
+    <div class="logo"><img src="/static/modelimg.png" width="200" height="80"></div>
+    <button class="menu-btn" onclick="window.location='/'">&#128444; Upload Detection</button>
+    <button class="menu-btn" onclick="goBack()">&#128247; Live Detection</button>
+    <button class="menu-btn" onclick="window.location='/logs'">&#128202; Recognition Logs</button>
+    <button class="menu-btn" onclick="toggleDarkMode()">&#127769; Dark Mode</button>
+  </div>
+  <div class="main">
+    <div class="header">
+      <div class="header-title">Live Tray Identification</div>
+      <div class="status" id="liStatus">&#9679; Ready</div>
+    </div>
+    <div class="content">
+      <button class="go-back" onclick="goBack()">&#8592; Go Back</button>
+
+      <div id="startScreen">
+        <div class="panel" style="height:calc(100vh - 220px);">
+          <div class="start-screen">
+            <div style="font-size:56px;">&#128269;</div>
+            <h2>Live Tray Identification</h2>
+            <p>Place your parts under the camera, then click Start to begin a 10-second detection scan.</p>
+            <button class="start-btn" onclick="startRecognition()">&#9654; Start Recognition</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="recognitionScreen" style="display:none;">
+        <div class="li-layout">
+          <div class="li-feed">
+            <div class="panel">
+              <h3 style="margin-bottom:8px;">Camera Feed</h3>
+              <img id="liFeed">
+            </div>
+          </div>
+          <div class="li-right">
+            <div class="timer-section">
+              <div class="timer-label">
+                <span id="timerMsg">&#128269; Scanning parts...</span>
+                <span id="timerBadge" style="background:#eef6ff;color:#007bff;padding:3px 8px;border-radius:6px;font-size:12px;">SCANNING</span>
+              </div>
+              <div class="timer-bar-wrap">
+                <div class="timer-fill" id="timerFill"></div>
+              </div>
+              <div class="timer-countdown" id="timerCountdown">10s</div>
+            </div>
+            <div class="panel" style="flex:1; overflow-y:auto;">
+              <h3 style="margin-bottom:12px;">Detected Parts</h3>
+              <div id="liCountBoxes" class="count-boxes">
+                <div class="scanning-msg">Scanning... results appear in 10 seconds.</div>
+              </div>
+              <div id="liTotalSection" style="display:none; margin-top:12px;">
+                <div class="total-box">
+                  <div class="tlabel">Total Part Count</div>
+                  <div class="tval" id="liTotal">0</div>
+                </div>
+                <br>
+                <button class="action-btn rerecog" onclick="reRecognize()" style="margin-bottom:8px;">
+                  &#128260; Re-Recognize
+                </button>
+                <button class="action-btn confirm" onclick="confirmLive()">
+                  &#10004; Confirm &amp; Log
+                </button>
+                <div class="confirm-status" id="liConfirmStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let partsData    = [];
+let liveItems    = [];   // raw detected items
+let resultsReady = false;
+let pollTimer    = null;
+const BUFFER_SECS = 10;
+
+async function loadParts() {
+  const res = await fetch("/partial_manual/parts_list");
+  partsData = await res.json();
+}
+
+async function startRecognition() {
+  await fetch("/live_identification/start", { method:"POST" });
+  document.getElementById("startScreen").style.display       = "none";
+  document.getElementById("recognitionScreen").style.display = "block";
+  document.getElementById("liStatus").innerText = "&#9679; Scanning...";
+  document.getElementById("liFeed").src =
+    "/live_identification/video_feed?" + new Date().getTime();
+  startPolling();
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollDetections, 1500);
+}
+
+async function pollDetections() {
+  const res  = await fetch("/live_identification/detections");
+  const data = await res.json();
+  updateCountdownFromServer(data.time_left);
+  if (data.results_ready && !resultsReady) {
+    resultsReady = true;
+    liveItems    = data.detections;
+    onResultsReady();
+  }
+}
+
+function updateCountdownFromServer(timeLeft) {
+  if (resultsReady) return;
+  const elapsed = BUFFER_SECS - timeLeft;
+  const pct     = Math.min((elapsed / BUFFER_SECS) * 100, 100);
+  document.getElementById("timerFill").style.width    = pct + "%";
+  document.getElementById("timerCountdown").innerText = Math.ceil(timeLeft) + "s";
+}
+
+function onResultsReady() {
+  document.getElementById("timerFill").className      = "timer-fill done";
+  document.getElementById("timerCountdown").className = "timer-countdown done";
+  document.getElementById("timerCountdown").innerText = "Done";
+  document.getElementById("timerMsg").innerText       = "Detection complete - edit below";
+  document.getElementById("timerBadge").innerText     = "READY";
+  document.getElementById("timerBadge").style.background = "#e6f9ec";
+  document.getElementById("timerBadge").style.color      = "#28a745";
+  document.getElementById("liStatus").innerText       = "&#9679; Results Ready";
+
+  if (liveItems.length === 0) {
+    document.getElementById("liCountBoxes").innerHTML =
+      `<div class="no-detect">No parts detected. Try Re-Recognize.</div>`;
+  } else {
+    renderLiveBoxes(liveItems);
+    updateLiTotal();
+  }
+  document.getElementById("liTotalSection").style.display = "block";
+}
+
+function renderLiveBoxes(detections) {
+  const container = document.getElementById("liCountBoxes");
+  container.innerHTML = "";
+
+  detections.forEach((d, idx) => {
+    const box = document.createElement("div");
+    box.className = "count-box";
+    box.innerHTML = `
+      <button class="cbox-delete" title="Remove" onclick="deleteLiveBox(${idx})">&#10005;</button>
+      <div class="cbox-header">
+        <h4>Part ${idx + 1}</h4>
+      </div>
+      <div class="cbox-cols">
+        <div class="cbox-col">
+          <span class="col-label detected">&#128247; Camera Detected</span>
+          <div class="cbox-field"><label>Part Name</label><div class="val">${d.part_name}</div></div>
+          <div class="cbox-field"><label>Part Number</label><div class="val">${d.part_number}</div></div>
+          <div class="cbox-field"><label>Issue</label><div class="val">${d.issue}</div></div>
+        </div>
+        <div class="cbox-col">
+          <span class="col-label edited">&#9998; User Edited</span>
+          <div class="cbox-row">
+            <label>Part Name</label>
+            <div class="cbox-wrap">
+              <input type="text" id="li_name_${idx}" value="${d.part_name}" autocomplete="off"
+                     oninput="filterLiCombo(${idx},'name')" onfocus="filterLiCombo(${idx},'name')"
+                     onblur="hideLiCombo(${idx},'name')">
+              <div class="combo-list" id="lcl_name_${idx}"></div>
+            </div>
+          </div>
+          <div class="cbox-row">
+            <label>Part Number</label>
+            <div class="cbox-wrap">
+              <input type="text" id="li_number_${idx}" value="${d.part_number}" autocomplete="off"
+                     oninput="filterLiCombo(${idx},'number')" onfocus="filterLiCombo(${idx},'number')"
+                     onblur="hideLiCombo(${idx},'number')">
+              <div class="combo-list" id="lcl_number_${idx}"></div>
+            </div>
+          </div>
+          <div class="cbox-row">
+            <label>Issue</label>
+            <div class="cbox-wrap">
+              <input type="text" id="li_issue_${idx}" value="${d.issue}" autocomplete="off"
+                     oninput="filterLiCombo(${idx},'issue')" onfocus="filterLiCombo(${idx},'issue')"
+                     onblur="hideLiCombo(${idx},'issue')">
+              <div class="combo-list" id="lcl_issue_${idx}"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="count-row">
+        <label>Count:</label>
+        <input type="number" class="count-input" id="li_count_${idx}"
+               value="${d.count}" min="0"
+               oninput="updateLiTotal()"
+               onchange="pushLiCount('${d.yolo_class}', ${idx})">
+        <span class="cbox-conf">Confidence: ${d.confidence}%</span>
+      </div>`;
+    container.appendChild(box);
+  });
+}
+
+function deleteLiveBox(idx) {
+  liveItems.splice(idx, 1);
+  renderLiveBoxes(liveItems);
+  updateLiTotal();
+  if (liveItems.length === 0) {
+    document.getElementById("liCountBoxes").innerHTML =
+      `<div class="no-detect">All parts removed. Try Re-Recognize.</div>`;
+    document.getElementById("liTotalSection").style.display = "none";
+  }
+}
+
+function filterLiCombo(idx, field) {
+  const keyMap  = { name:"part_name", number:"part_number", issue:"issue" };
+  const input   = document.getElementById(`li_${field}_${idx}`);
+  const list    = document.getElementById(`lcl_${field}_${idx}`);
+  const query   = input.value.trim().toLowerCase();
+  const values  = [...new Set(partsData.map(p => String(p[keyMap[field]])))].sort();
+  const matches = query ? values.filter(v => v.toLowerCase().includes(query)) : values;
+  list.innerHTML = matches.length
+    ? matches.map(v => `<div class="combo-item" onmousedown="selectLiCombo(${idx},'${field}','${v.replace(/'/g,"\\'")}')">${v}</div>`).join("")
+    : `<div class="combo-item" style="color:#999">No matches</div>`;
+  list.style.display = "block";
+}
+
+function selectLiCombo(idx, field, value) {
+  document.getElementById(`li_${field}_${idx}`).value = value;
+  document.getElementById(`lcl_${field}_${idx}`).style.display = "none";
+  const keyMap = { name:"part_name", number:"part_number", issue:"issue" };
+  const row    = partsData.find(p => String(p[keyMap[field]]) === value);
+  if (row) {
+    document.getElementById(`li_name_${idx}`).value   = row.part_name;
+    document.getElementById(`li_number_${idx}`).value = row.part_number;
+    document.getElementById(`li_issue_${idx}`).value  = row.issue;
+  }
+}
+
+function hideLiCombo(idx, field) {
+  setTimeout(() => {
+    const el = document.getElementById(`lcl_${field}_${idx}`);
+    if (el) el.style.display = "none";
+  }, 150);
+}
+
+async function pushLiCount(yolo_class, idx) {
+  const count = parseInt(document.getElementById(`li_count_${idx}`).value) || 0;
+  await fetch("/live_identification/update_count", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ yolo_class, count })
+  });
+  updateLiTotal();
+}
+
+function updateLiTotal() {
+  let total = 0;
+  liveItems.forEach((_, idx) => {
+    total += parseInt(document.getElementById(`li_count_${idx}`)?.value || 0);
+  });
+  document.getElementById("liTotal").innerText = total;
+}
+
+async function reRecognize() {
+  resultsReady = false;
+  liveItems    = [];
+  await fetch("/live_identification/rerecognize", { method:"POST" });
+  document.getElementById("timerFill").className      = "timer-fill";
+  document.getElementById("timerFill").style.width    = "0%";
+  document.getElementById("timerCountdown").className = "timer-countdown";
+  document.getElementById("timerCountdown").innerText = "10s";
+  document.getElementById("timerMsg").innerText       = "&#128269; Scanning parts...";
+  document.getElementById("timerBadge").innerText     = "SCANNING";
+  document.getElementById("timerBadge").style.background = "#eef6ff";
+  document.getElementById("timerBadge").style.color      = "#007bff";
+  document.getElementById("liStatus").innerText       = "&#9679; Scanning...";
+  document.getElementById("liCountBoxes").innerHTML   =
+    `<div class="scanning-msg">Scanning... results appear in 10 seconds.</div>`;
+  document.getElementById("liTotalSection").style.display = "none";
+  document.getElementById("liConfirmStatus").innerText    = "";
+}
+
+async function confirmLive() {
+  const items = liveItems.map((d, idx) => ({
+    yolo_class:  d.yolo_class,
+    orig_name:   d.part_name,
+    orig_number: d.part_number,
+    orig_issue:  d.issue,
+    part_name:   document.getElementById(`li_name_${idx}`).value.trim(),
+    part_number: document.getElementById(`li_number_${idx}`).value.trim(),
+    issue:       document.getElementById(`li_issue_${idx}`).value.trim(),
+    confidence:  d.confidence,
+    count:       parseInt(document.getElementById(`li_count_${idx}`).value || 0)
+  }));
+
+  const res  = await fetch("/live_identification/confirm", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ items })
+  });
+  const data = await res.json();
+  const status = document.getElementById("liConfirmStatus");
+  status.innerText = data.logged > 0 ? `${data.logged} part(s) logged` : "Nothing to log.";
+  await loadParts();
+  setTimeout(() => { status.innerText = ""; }, 3000);
+}
+
+function goBack() {
+  if (pollTimer) clearInterval(pollTimer);
+  fetch("/live_identification/stop");
+  document.getElementById("liFeed").src = "";
+  window.location = "/?live=1";
+}
+function toggleSidebar() { document.getElementById("sidebar").classList.toggle("collapsed"); }
+function toggleDarkMode() { document.body.classList.toggle("dark"); }
+loadParts();
+</script>
+</body>
+</html>

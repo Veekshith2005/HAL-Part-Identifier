@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>HAL AIS Dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}">
+<style>
+  .mode-selector  { display:none; }
+  .mode-cards     { display:flex; gap:24px; margin-top:30px; justify-content:center; }
+  .mode-card      { background:#fff; border-radius:16px; padding:36px 32px;
+                    box-shadow:0 4px 20px rgba(0,0,0,.1); cursor:pointer;
+                    text-align:center; width:260px; transition:.25s;
+                    border:2px solid transparent; }
+  .mode-card:hover { border-color:#007bff; transform:translateY(-4px);
+                    box-shadow:0 8px 28px rgba(0,123,255,.18); }
+  .mode-card .mc-icon { font-size:48px; margin-bottom:14px; }
+  .mode-card h3   { font-size:18px; font-weight:700; margin-bottom:8px; color:#0b1f3a; }
+  .mode-card p    { font-size:13px; color:#666; line-height:1.5; }
+
+  /* ── full-screen image modal ── */
+  .image-modal      { display:none; position:fixed; inset:0; z-index:9999;
+                      background:rgba(0,0,0,.92); }
+  .image-modal.open { display:block; }
+
+  /* close button — top-right */
+  .close-modal      { position:fixed; top:18px; right:18px;
+                      width:38px; height:38px; border-radius:50%;
+                      background:#ff3b30; color:#fff; border:none;
+                      font-size:20px; cursor:pointer; font-weight:bold;
+                      z-index:10001; line-height:38px; text-align:center; }
+
+  /* scrollable image area */
+  .modal-scroll     { position:fixed; inset:0; overflow:auto;
+                      display:flex; justify-content:center; align-items:flex-start;
+                      padding:60px 20px 100px; box-sizing:border-box; }
+  .modal-image      { display:block; border-radius:10px;
+                      box-shadow:0 8px 40px rgba(0,0,0,.6);
+                      transition:width .18s ease; cursor:zoom-in; }
+
+  /* zoom controls — bottom-right corner */
+  .zoom-controls    { position:fixed; bottom:24px; right:24px;
+                      display:none; flex-direction:column; align-items:center;
+                      gap:6px; z-index:10001; }
+  .zoom-controls.visible { display:flex; }
+  .zoom-btn         { width:40px; height:40px; border-radius:50%;
+                      background:rgba(255,255,255,.18);
+                      color:#fff; border:1.5px solid rgba(255,255,255,.4);
+                      font-size:22px; font-weight:700; cursor:pointer;
+                      display:flex; align-items:center; justify-content:center;
+                      transition:.15s; }
+  .zoom-btn:hover   { background:rgba(255,255,255,.35); }
+  .zoom-level       { color:#fff; font-size:12px; font-weight:600;
+                      background:rgba(0,0,0,.4); padding:3px 8px; border-radius:10px; }
+  .zoom-reset       { font-size:11px; width:auto; padding:0 10px;
+                      border-radius:10px; height:28px; }
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <div class="sidebar" id="sidebar">
+    <button class="collapse-btn" onclick="toggleSidebar()">&#9776;</button>
+    <div class="logo">
+      <img src="{{ url_for('static',filename='modelimg.png') }}" width="200" height="80">
+    </div>
+    <button class="menu-btn" onclick="openUpload()">&#128444; Upload Detection</button>
+    <button class="menu-btn" onclick="openLive()">&#128247; Live Detection</button>
+    <button class="menu-btn" onclick="openLogs()">&#128202; Recognition Logs</button>
+    <button class="menu-btn" onclick="toggleDarkMode()">&#127769; Dark Mode</button>
+  </div>
+
+  <div class="main">
+    <div class="header">
+      <div class="header-title">HAL Part Identification System</div>
+      <div class="status">&#9679; System Online</div>
+    </div>
+
+    <div class="content">
+
+      <!-- RESULT CARDS -->
+      <div class="cards" id="resultCards">
+        <div class="card">
+          <h3>Part Number</h3>
+          <p id="part_number">{{ result.part_number if result and result.part_number else "—" }}</p>
+        </div>
+        <div class="card">
+          <h3>Part Name</h3>
+          <p id="part_name">{{ result.part_name if result and result.part_name else "—" }}</p>
+        </div>
+        <div class="card">
+          <h3>Issue</h3>
+          <p id="issue">{{ result.issue if result and result.issue else "—" }}</p>
+        </div>
+        <div class="card">
+          <h3>Confidence</h3>
+          <p id="confidence">
+            {% if result and result.confidence %}{{ result.confidence }}%{% else %}—{% endif %}
+          </p>
+        </div>
+      </div>
+
+      <!-- UPLOAD SECTION -->
+      <div id="upload-section">
+        <div class="panel">
+          <h2>Upload Part Image</h2>
+          <button class="upload-btn" onclick="refreshUpload()">&#128260; Refresh</button>
+          <br><br>
+          <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="image" accept="image/*" required>
+            <br><br>
+            <button type="submit" class="upload-btn">&#128269; Detect Part</button>
+          </form>
+
+          {% if uploaded_image %}
+          <div class="image-preview-container">
+            <img src="{{ uploaded_image }}" class="preview-thumb" onclick="openImageModal()">
+            <br><br>
+            <button type="button" class="upload-btn" onclick="openImageModal()">
+              &#128269; View Full Image
+            </button>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- MODE SELECTOR -->
+      <div id="mode-selector" class="mode-selector">
+        <div class="panel">
+          <p class="mode-section-title">Select Detection Mode</p>
+          <p class="mode-section-sub">Choose how you want to identify parts using the live camera.</p>
+          <div class="mode-cards">
+            <div class="mode-card" onclick="goPartialManual()">
+              <span class="mc-icon">&#128400;</span>
+              <h3>Partial-Manual</h3>
+              <p>Select expected part from dropdowns, capture image and count.</p>
+            </div>
+            <div class="mode-card" onclick="goLiveIdentification()">
+              <span class="mc-icon">&#128269;</span>
+              <h3>Live Identification</h3>
+              <p>Place parts in the tray. Camera auto-detects all parts by zone and counts them over 10 seconds.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Full-screen image modal (upload page) -->
+<div class="image-modal" id="imageModal">
+  <button class="close-modal" onclick="closeImageModal()">&#10006;</button>
+  <div class="modal-scroll" id="modalScroll" onclick="handleModalBackdrop(event)">
+    {% if uploaded_image %}
+    <img src="{{ uploaded_image }}" class="modal-image" id="modalImage">
+    {% endif %}
+  </div>
+</div>
+
+<!-- Zoom controls pinned bottom-right (upload modal) -->
+<div class="zoom-controls" id="uploadZoomControls">
+  <button class="zoom-btn" onclick="uploadZoomIn()" title="Zoom in">&#43;</button>
+  <span class="zoom-level" id="uploadZoomLevel">100%</span>
+  <button class="zoom-btn" onclick="uploadZoomOut()" title="Zoom out">&#8722;</button>
+  <button class="zoom-btn zoom-reset" onclick="uploadZoomReset()">Reset</button>
+</div>
+
+<script>
+let mode = "{{ 'upload' if result else 'idle' }}";
+
+window.addEventListener("load", () => {
+  if (window.location.search.includes("live=1")) {
+    openLive();
+    history.replaceState({}, "", "/");
+  }
+});
+
+function toggleSidebar() { document.getElementById("sidebar").classList.toggle("collapsed"); }
+function toggleDarkMode() { document.body.classList.toggle("dark"); }
+
+function openUpload() {
+  mode = "idle";
+  fetch("/stop_camera");
+  document.getElementById("upload-section").style.display = "block";
+  document.getElementById("mode-selector").style.display  = "none";
+  document.getElementById("resultCards").style.display    = "flex";
+  clearCards();
+}
+
+function openLive() {
+  mode = "idle";
+  fetch("/stop_camera");
+  document.getElementById("upload-section").style.display = "none";
+  document.getElementById("mode-selector").style.display  = "block";
+  document.getElementById("resultCards").style.display    = "none";
+}
+
+function goPartialManual()      { window.location = "/partial_manual/"; }
+function goLiveIdentification() { window.location = "/live_identification/"; }
+
+function openLogs() {
+  mode = "idle";
+  fetch("/stop_camera");
+  window.location = "/logs";
+}
+
+function clearCards() {
+  document.getElementById("part_number").innerHTML = "—";
+  document.getElementById("part_name").innerHTML   = "—";
+  document.getElementById("issue").innerHTML       = "—";
+  document.getElementById("confidence").innerHTML  = "—";
+}
+
+function refreshUpload() {
+  fetch("/reset_detection");
+  clearCards();
+}
+
+// ── upload image modal + zoom ────────────────────────────
+const UPLOAD_BASE_WIDTH = 800;
+let uploadZoom = 1.0;
+
+function openImageModal() {
+  uploadZoom = 1.0;
+  const img = document.getElementById("modalImage");
+  if (img) { img.style.width = UPLOAD_BASE_WIDTH + "px"; img.style.height = "auto"; }
+  document.getElementById("uploadZoomLevel").innerText = "100%";
+  document.getElementById("imageModal").classList.add("open");
+  document.getElementById("uploadZoomControls").classList.add("visible");
+}
+
+function closeImageModal() {
+  document.getElementById("imageModal").classList.remove("open");
+  document.getElementById("uploadZoomControls").classList.remove("visible");
+  uploadZoom = 1.0;
+}
+
+function handleModalBackdrop(e) {
+  if (e.target === document.getElementById("modalScroll")) closeImageModal();
+}
+
+function uploadZoomIn() {
+  uploadZoom = Math.min(uploadZoom + 0.25, 5.0);
+  applyUploadZoom();
+}
+function uploadZoomOut() {
+  uploadZoom = Math.max(uploadZoom - 0.25, 0.25);
+  applyUploadZoom();
+}
+function uploadZoomReset() {
+  uploadZoom = 1.0;
+  applyUploadZoom();
+}
+function applyUploadZoom() {
+  const img = document.getElementById("modalImage");
+  if (img) { img.style.width = Math.round(UPLOAD_BASE_WIDTH * uploadZoom) + "px"; img.style.height = "auto"; }
+  document.getElementById("uploadZoomLevel").innerText = Math.round(uploadZoom * 100) + "%";
+}
+
+document.getElementById("imageModal").addEventListener("wheel", e => {
+  if (!document.getElementById("imageModal").classList.contains("open")) return;
+  e.preventDefault();
+  if (e.deltaY < 0) uploadZoomIn(); else uploadZoomOut();
+}, { passive: false });
+
+document.addEventListener("keydown", e => {
+  const modalOpen = document.getElementById("imageModal").classList.contains("open");
+  if (!modalOpen) return;
+  if (e.key === "Escape")              closeImageModal();
+  if (e.key === "+" || e.key === "=") uploadZoomIn();
+  if (e.key === "-")                   uploadZoomOut();
+  if (e.key === "0")                   uploadZoomReset();
+});
+
+// ── polling (upload mode only) ───────────────────────────
+setInterval(() => {
+  if (mode !== "live") return;
+  fetch("/detection_data")
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById("part_number").innerHTML = data.part_number || "—";
+      document.getElementById("part_name").innerHTML   = data.part_name   || "—";
+      document.getElementById("issue").innerHTML       = data.issue        || "—";
+      document.getElementById("confidence").innerHTML  = data.confidence ? data.confidence + "%" : "—";
+    });
+}, 500);
+</script>
+</body>
+</html>

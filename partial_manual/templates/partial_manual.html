@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>HAL – Partial Manual Identification</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+  .pm-layout        { display:flex; gap:20px; height:calc(100vh - 160px); }
+  .pm-feed          { flex:1.2; display:flex; flex-direction:column; gap:10px; }
+  .pm-feed .panel   { flex:1; padding:12px; display:flex; flex-direction:column; }
+  .pm-feed img      { flex:1; width:100%; border-radius:10px; object-fit:cover; }
+  .pm-right         { flex:1.6; display:flex; flex-direction:column; gap:12px; overflow-y:auto; }
+
+  .capture-btn      { width:100%; padding:13px; background:#007bff; color:#fff;
+                      border:none; border-radius:10px; font-size:16px; font-weight:700;
+                      cursor:pointer; transition:.2s; }
+  .capture-btn:hover      { background:#0056b3; }
+  .capture-btn:disabled   { background:#aaa; cursor:not-allowed; }
+  .capture-btn.confirm-btn { background:#28a745; }
+  .capture-btn.confirm-btn:hover { background:#1e7e34; }
+  .detect-status    { text-align:center; font-size:13px; color:#666;
+                      padding:8px; border-radius:8px; background:#f0f4f8; }
+
+  .count-boxes      { display:flex; flex-direction:column; gap:16px; }
+  .count-box        { background:#fff; border-radius:12px;
+                      box-shadow:0 2px 8px rgba(0,0,0,.08);
+                      border-left:4px solid #007bff; position:relative; }
+  .cbox-header      { display:flex; align-items:center; justify-content:space-between;
+                      padding:10px 14px 0; }
+  .cbox-header h4   { font-size:11px; color:#007bff; text-transform:uppercase;
+                      letter-spacing:.6px; margin:0; padding-right:28px; }
+  .cbox-conf        { font-size:11px; color:#888; }
+  .cbox-cols        { display:flex; gap:0; }
+  .cbox-col         { flex:1; padding:10px 14px 14px; }
+  .cbox-col:first-child { border-right:1px solid #eef; }
+  .col-label        { font-size:10px; font-weight:700; text-transform:uppercase;
+                      letter-spacing:.7px; margin-bottom:8px; padding:3px 8px;
+                      border-radius:4px; display:inline-block; }
+  .col-label.detected { background:#e8f4fd; color:#0066cc; }
+  .col-label.edited   { background:#e8f9ef; color:#1a7a3c; }
+  .cbox-field       { margin-bottom:8px; }
+  .cbox-field label { font-size:10px; color:#999; display:block; margin-bottom:2px; }
+  .cbox-field .val  { font-size:13px; font-weight:600; color:#0b1f3a;
+                      padding:4px 0; border-bottom:1px solid #f0f0f0; }
+  .cbox-row         { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .cbox-row label   { font-size:10px; color:#999; min-width:60px; }
+  .cbox-row input   { flex:1; padding:5px 8px; border-radius:6px;
+                      border:1.5px solid #ccd; font-size:13px; font-weight:600; }
+  .cbox-row input.count-input { width:65px; flex:none; text-align:center; font-size:15px; }
+  .count-row        { padding:8px 14px 12px; border-top:1px solid #f0f0f0;
+                      display:flex; align-items:center; gap:10px; }
+  .count-row label  { font-size:11px; color:#888; }
+  .cbox-delete      { position:absolute; top:8px; right:10px; width:24px; height:24px;
+                      border-radius:50%; background:#ff3b30; color:#fff; border:none;
+                      font-size:14px; line-height:24px; text-align:center;
+                      cursor:pointer; font-weight:bold; padding:0; transition:.15s; }
+  .cbox-delete:hover { background:#cc0000; transform:scale(1.1); }
+  .cbox-wrap        { position:relative; flex:1; }
+  .combo-list       { display:none; position:absolute; top:100%; left:0; right:0;
+                      max-height:160px; overflow-y:auto; background:#fff;
+                      border:1.5px solid #ccd; border-radius:8px; margin-top:2px;
+                      z-index:999; box-shadow:0 4px 12px rgba(0,0,0,.12); }
+  .combo-item       { padding:7px 10px; font-size:12px; cursor:pointer; }
+  .combo-item:hover { background:#eef6ff; }
+  .total-box        { background:#0b1f3a; color:#fff; border-radius:12px;
+                      padding:12px 18px; text-align:center; }
+  .total-box .tlabel { font-size:11px; color:#aac; text-transform:uppercase; letter-spacing:.6px; }
+  .total-box .tval   { font-size:28px; font-weight:800; margin-top:4px; }
+  .go-back          { display:inline-flex; align-items:center; gap:6px;
+                      background:#0b1f3a; color:#fff; border:none; border-radius:8px;
+                      padding:9px 18px; font-size:14px; cursor:pointer; margin-bottom:16px; }
+  .go-back:hover    { background:#183d69; }
+  .confirm-status   { text-align:center; font-size:12px; color:#28a745;
+                      margin-top:4px; min-height:18px; }
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <div class="sidebar" id="sidebar">
+    <button class="collapse-btn" onclick="toggleSidebar()">&#9776;</button>
+    <div class="logo"><img src="/static/modelimg.png" width="200" height="80"></div>
+    <button class="menu-btn" onclick="window.location='/'">&#128444; Upload Detection</button>
+    <button class="menu-btn" onclick="goBack()">&#128247; Live Detection</button>
+    <button class="menu-btn" onclick="window.location='/logs'">&#128202; Recognition Logs</button>
+    <button class="menu-btn" onclick="toggleDarkMode()">&#127769; Dark Mode</button>
+  </div>
+  <div class="main">
+    <div class="header">
+      <div class="header-title">Partial-Manual Identification</div>
+      <div class="status">&#9679; System Online</div>
+    </div>
+    <div class="content">
+      <button class="go-back" onclick="goBack()">&#8592; Go Back</button>
+      <div class="pm-layout">
+        <div class="pm-feed">
+          <div class="panel">
+            <h3 style="margin-bottom:8px;">Live Camera Feed</h3>
+            <img id="pmFeed" src="/partial_manual/video_feed">
+          </div>
+          <button class="capture-btn" id="captureBtn" onclick="captureAndCount()">
+            &#128248; Capture &amp; Count
+          </button>
+        </div>
+        <div class="pm-right">
+          <div class="panel" style="flex:1; overflow-y:auto;">
+            <h3 style="margin-bottom:12px;">Detected Parts</h3>
+            <div id="detectStatus" class="detect-status">
+              Click "Capture &amp; Count" to detect parts in frame.
+            </div>
+            <div id="countBoxes" class="count-boxes" style="margin-top:12px;"></div>
+            <div id="totalSection" style="display:none; margin-top:12px;">
+              <div class="total-box">
+                <div class="tlabel">Total Part Count</div>
+                <div class="tval" id="pmTotal">0</div>
+              </div>
+              <br>
+              <button class="capture-btn confirm-btn" onclick="confirmAndLog()">
+                &#10004; Confirm &amp; Log
+              </button>
+              <div class="confirm-status" id="confirmStatus"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let partsData    = [];
+let capturedData = [];
+
+async function loadParts() {
+  const res = await fetch("/partial_manual/parts_list");
+  partsData = await res.json();
+}
+
+async function captureAndCount() {
+  const btn = document.getElementById("captureBtn");
+  btn.disabled = true;
+  btn.innerText = "Detecting...";
+  document.getElementById("detectStatus").innerText = "Running detection...";
+  document.getElementById("countBoxes").innerHTML   = "";
+  document.getElementById("totalSection").style.display = "none";
+
+  const res  = await fetch("/partial_manual/capture_count", { method:"POST" });
+  const data = await res.json();
+
+  if (data.error || !data.detections || data.detections.length === 0) {
+    document.getElementById("detectStatus").innerText =
+      data.message || data.error || "No parts detected in frame.";
+    btn.disabled = false;
+    btn.innerHTML = "&#128248; Capture &amp; Count";
+    return;
+  }
+
+  document.getElementById("detectStatus").innerText =
+    `${data.detections.length} unique part(s) detected.`;
+
+  capturedData = data.detections.map(d => ({
+    detected: { ...d },
+    edited:   { ...d }
+  }));
+
+  renderCountBoxes(capturedData);
+  document.getElementById("totalSection").style.display = "block";
+  updatePMTotal();
+  btn.disabled = false;
+  btn.innerHTML = "&#128248; Capture &amp; Count";
+}
+
+function renderCountBoxes(items) {
+  const container = document.getElementById("countBoxes");
+  container.innerHTML = "";
+  items.forEach((item, idx) => {
+    const d = item.detected;
+    const e = item.edited;
+    const box = document.createElement("div");
+    box.className = "count-box";
+    box.id = `cbox_${idx}`;
+    box.innerHTML = `
+
+      <button class="cbox-delete" title="Remove" onclick="deleteBox(${idx})">&#10005;</button>
+      <div class="cbox-header">
+        <h4>Detection ${idx + 1}</h4>
+      </div>
+      <div class="cbox-cols">
+        <div class="cbox-col">
+          <span class="col-label detected">&#128247; Camera Detected</span>
+          <div class="cbox-field"><label>Part Name</label><div class="val">${d.part_name}</div></div>
+          <div class="cbox-field"><label>Part Number</label><div class="val">${d.part_number}</div></div>
+          <div class="cbox-field"><label>Issue</label><div class="val">${d.issue}</div></div>
+        </div>
+        <div class="cbox-col">
+          <span class="col-label edited">&#9998; User Edited</span>
+          <div class="cbox-row">
+            <label>Part Name</label>
+            <div class="cbox-wrap">
+              <input type="text" id="pm_name_${idx}" value="${e.part_name}" autocomplete="off"
+                     oninput="filterCboxCombo(${idx},'name')" onfocus="filterCboxCombo(${idx},'name')"
+                     onblur="hideCboxComboDelayed(${idx},'name')">
+              <div class="combo-list" id="cl_name_${idx}"></div>
+            </div>
+          </div>
+          <div class="cbox-row">
+            <label>Part Number</label>
+            <div class="cbox-wrap">
+              <input type="text" id="pm_number_${idx}" value="${e.part_number}" autocomplete="off"
+                     oninput="filterCboxCombo(${idx},'number')" onfocus="filterCboxCombo(${idx},'number')"
+                     onblur="hideCboxComboDelayed(${idx},'number')">
+              <div class="combo-list" id="cl_number_${idx}"></div>
+            </div>
+          </div>
+          <div class="cbox-row">
+            <label>Issue</label>
+            <div class="cbox-wrap">
+              <input type="text" id="pm_issue_${idx}" value="${e.issue}" autocomplete="off"
+                     oninput="filterCboxCombo(${idx},'issue')" onfocus="filterCboxCombo(${idx},'issue')"
+                     onblur="hideCboxComboDelayed(${idx},'issue')">
+              <div class="combo-list" id="cl_issue_${idx}"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="count-row">
+        <label>Count:</label>
+        <input type="number" class="count-input" id="pm_count_${idx}"
+               value="${e.count}" min="0" oninput="updatePMTotal()">
+        <span class="cbox-conf"> Confidence: ${d.confidence}%</span>
+      </div>`;
+    container.appendChild(box);
+  });
+}
+
+function deleteBox(idx) {
+  capturedData.splice(idx, 1);
+  renderCountBoxes(capturedData);
+  updatePMTotal();
+  if (capturedData.length === 0) {
+    document.getElementById("totalSection").style.display = "none";
+    document.getElementById("detectStatus").innerText = "All parts removed. Capture again.";
+  }
+}
+
+function filterCboxCombo(idx, field) {
+  const keyMap = { name:"part_name", number:"part_number", issue:"issue" };
+  const input  = document.getElementById(`pm_${field}_${idx}`);
+  const list   = document.getElementById(`cl_${field}_${idx}`);
+  const query  = input.value.trim().toLowerCase();
+  const values = [...new Set(partsData.map(p => String(p[keyMap[field]])))].sort();
+  const matches = query ? values.filter(v => v.toLowerCase().includes(query)) : values;
+  list.innerHTML = matches.length
+    ? matches.map(v => `<div class="combo-item" onmousedown="selectCboxCombo(${idx},'${field}','${v.replace(/'/g,"\\'")}')">${v}</div>`).join("")
+    : `<div class="combo-item" style="color:#999">No matches</div>`;
+  list.style.display = "block";
+}
+
+function selectCboxCombo(idx, field, value) {
+  document.getElementById(`pm_${field}_${idx}`).value = value;
+  document.getElementById(`cl_${field}_${idx}`).style.display = "none";
+  const keyMap = { name:"part_name", number:"part_number", issue:"issue" };
+  const row = partsData.find(p => String(p[keyMap[field]]) === value);
+  if (row) {
+    document.getElementById(`pm_name_${idx}`).value   = row.part_name;
+    document.getElementById(`pm_number_${idx}`).value = row.part_number;
+    document.getElementById(`pm_issue_${idx}`).value  = row.issue;
+  }
+}
+
+function hideCboxComboDelayed(idx, field) {
+  setTimeout(() => {
+    const el = document.getElementById(`cl_${field}_${idx}`);
+    if (el) el.style.display = "none";
+  }, 150);
+}
+
+function updatePMTotal() {
+  let total = 0;
+  capturedData.forEach((_, idx) => {
+    total += parseInt(document.getElementById(`pm_count_${idx}`)?.value || 0);
+  });
+  document.getElementById("pmTotal").innerText = total;
+}
+
+async function confirmAndLog() {
+  const items = capturedData.map((item, idx) => ({
+    yolo_class:  item.detected.yolo_class,
+    orig_name:   item.detected.part_name,
+    orig_number: item.detected.part_number,
+    orig_issue:  item.detected.issue,
+    part_name:   document.getElementById(`pm_name_${idx}`).value.trim(),
+    part_number: document.getElementById(`pm_number_${idx}`).value.trim(),
+    issue:       document.getElementById(`pm_issue_${idx}`).value.trim(),
+    confidence:  item.detected.confidence,
+    count:       parseInt(document.getElementById(`pm_count_${idx}`).value || 0)
+  }));
+
+  const res  = await fetch("/partial_manual/confirm", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ items })
+  });
+  const data = await res.json();
+  const status = document.getElementById("confirmStatus");
+  status.innerText = data.logged > 0 ? `${data.logged} part(s) logged successfully` : "Nothing to log.";
+  await loadParts();
+  setTimeout(() => { status.innerText = ""; }, 3000);
+}
+
+function goBack() {
+  fetch("/partial_manual/stop");
+  document.getElementById("pmFeed").src = "";
+  window.location = "/?live=1";
+}
+function toggleSidebar() { document.getElementById("sidebar").classList.toggle("collapsed"); }
+function toggleDarkMode() { document.body.classList.toggle("dark"); }
+loadParts();
+</script>
+</body>
+</html>
